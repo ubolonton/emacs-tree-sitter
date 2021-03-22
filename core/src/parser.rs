@@ -7,6 +7,7 @@ use crate::{
     types::{BytePos, Point, Range, Shared},
     lang::Language,
     error,
+    buffer,
 };
 
 fn shared<T>(t: T) -> Shared<T> {
@@ -90,6 +91,34 @@ fn parse_chunks(parser: &mut Parser, input_function: Value, old_tree: Option<&Sh
         None => Ok(shared(tree)),
         Some(e) => Err(e),
     }
+}
+
+#[defun]
+fn parse_current_buffer(parser: &mut Parser, old_tree: Option<&Shared<Tree>>, env: &Env) -> Result<Shared<Tree>> {
+    let old_tree = match old_tree {
+        Some(v) => Some(v.try_borrow()?),
+        _ => None,
+    };
+    let old_tree = match &old_tree {
+        Some(r) => Some(&**r),
+        _ => None,
+    };
+    let (before_gap, after_gap) = unsafe { buffer::current_buffer_contents(env) };
+    let input = &mut |byte: usize, _: tree_sitter::Point| -> &[u8] {
+        if byte < before_gap.len() {
+            &before_gap[byte..]
+        } else {
+            let remaining_byte = byte - before_gap.len();
+            if remaining_byte < after_gap.len() {
+                &after_gap[remaining_byte..]
+            } else {
+                &[]
+            }
+        }
+    };
+    // TODO: Support error cases (None).
+    let tree = parser.parse_with(input, old_tree).unwrap();
+    Ok(shared(tree))
 }
 
 /// Use PARSER to parse the INPUT string, returning a tree.

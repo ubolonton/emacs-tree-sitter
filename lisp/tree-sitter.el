@@ -143,7 +143,9 @@ OLD-LEN is the char length of the old text."
     (setq tree-sitter-tree
           ;; https://github.com/ubolonton/emacs-tree-sitter/issues/3
           (tsc--without-restriction
-            (tsc-parse-chunks tree-sitter-parser #'tsc--buffer-input old-tree)))
+            (if (bound-and-true-p tsc--has-direct-buffer-access-p)
+                (tsc-parse-current-buffer tree-sitter-parser old-tree)
+              (tsc-parse-chunks tree-sitter-parser #'tsc--buffer-input old-tree))))
     (run-hook-with-args 'tree-sitter-after-change-functions old-tree)))
 
 (defun tree-sitter--setup ()

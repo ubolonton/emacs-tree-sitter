@@ -8,6 +8,7 @@ use crate::{
     lang::Language,
     node::RNode,
     error,
+    buffer,
 };
 
 fn vec_to_vector<'e, T: IntoLisp<'e>>(env: &'e Env, vec: Vec<T>) -> Result<Vector<'e>> {
@@ -204,6 +205,59 @@ fn _query_cursor_captures_1<'e>(
         if let Some(error) = error.borrow_mut().take() {
             return Err(error);
         }
+        let c = m.captures[capture_index];
+        let beg: BytePos = c.node.start_byte().into();
+        let end: BytePos = c.node.end_byte().into();
+        let capture = env.cons(
+            &query.capture_tags[c.index as usize],
+            env.cons(beg, end)?,
+        )?;
+        vec.push((m.pattern_index, capture));
+    }
+    // Prioritize captures from earlier patterns.
+    vec.sort_unstable_by_key(|(i, _)| *i);
+    let vector = env.make_vector(vec.len(), ())?;
+    for (i, (_, v)) in vec.into_iter().enumerate() {
+        vector.set(i, v)?;
+    }
+    Ok(vector)
+}
+
+#[defun]
+fn _query_cursor_captures_2<'e>(
+    // env: &Env,
+    cursor: &mut QueryCursor,
+    query: Value<'e>,
+    node: &RNode,
+) -> Result<Vector<'e>> {
+    use std::borrow::Cow;
+    let env = query.env;
+    let input = |node: Node| -> Cow<[u8]> {
+        let (before_gap, after_gap) = unsafe { buffer::current_buffer_contents(env) };
+        let range = node.byte_range();
+        let beg = range.start;
+        let end = range.end;
+        let before_len = before_gap.len();
+        if end < before_len {
+            return Cow::Borrowed(&before_gap[beg..end])
+        }
+        if beg >= before_len {
+            let rem_beg = beg - before_len;
+            let rem_end = end - before_len;
+            return Cow::Borrowed(&after_gap[rem_beg..rem_end])
+        }
+        Cow::Borrowed(&[])
+    };
+    let query = query.into_rust::<&RefCell<Query>>()?.borrow();
+    let raw = &query.raw;
+
+    let captures = cursor.captures(
+        raw,
+        node.borrow().clone(),
+        input,
+    );
+    let mut vec = vec![];
+    for (m, capture_index) in captures {
         let c = m.captures[capture_index];
         let beg: BytePos = c.node.start_byte().into();
         let end: BytePos = c.node.end_byte().into();
