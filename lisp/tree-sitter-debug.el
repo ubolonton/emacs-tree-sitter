@@ -65,11 +65,61 @@ This only takes effect if `tree-sitter-debug-jump-buttons' is non-nil."
                        'action 'tree-sitter-debug--button-node-lookup
                        'follow-link t
                        'points-to node)
-      (insert node-text)))
+      (let ((start (line-beginning-position)))
+        (insert node-text)
+        (put-text-property start (point) 'tree-sitter node))))
   (tsc-mapc-children (lambda (c)
                        (when (tsc-node-named-p c)
                          (tree-sitter-debug--display-node c (1+ depth))))
                      node))
+
+(defun tree-sitter-debug--follow ()
+  "Follow syntax element to original buffer."
+  (let ((node (get-text-property (point) 'tree-sitter))
+        (win (selected-window)))
+    (when node
+      (tree-sitter-debug--goto-node
+       tree-sitter-debug--source-code-buffer
+       node)
+      (select-window win))))
+
+;; Taken from: https://emacs.stackexchange.com/questions/46081/hook-when-line-number-changes
+(defvar tree-sitter-debug-current-line-number (line-number-at-pos))
+
+(defvar tree-sitter-debug-changed-line-hook nil)
+
+(defvar tree-sitter-debug-follow-mode nil)
+
+(defun tree-sitter-debug--update-line-number ()
+  "Update `tree-sitter-debug-current-line-number'."
+  (let ((new-line-number (line-number-at-pos)))
+    (when (not (equal new-line-number tree-sitter-debug-current-line-number))
+      (setq tree-sitter-debug-current-line-number new-line-number)
+      (run-hooks 'tree-sitter-debug-changed-line-hook))))
+
+(defun tree-sitter-debug-follow-mode-off ()
+  "Turn follow mode off."
+  (setq tree-sitter-debug-follow-mode nil)
+  (remove-hook 'post-command-hook #'tree-sitter-debug--update-line-number 't)
+  (remove-hook 'tree-sitter-debug-changed-line-hook #'tree-sitter-debug--follow 't)
+  (message "tree-sitter-follow-mode disabled."))
+
+
+(defun tree-sitter-debug-follow-mode-on ()
+  "Turn follow mode on."
+  (setq tree-sitter-debug-follow-mode 't)
+  (add-hook 'post-command-hook #'tree-sitter-debug--update-line-number nil 't)
+  (add-hook 'tree-sitter-debug-changed-line-hook #'tree-sitter-debug--follow nil 't)
+  (message "tree-sitter-follow-mode enabled."))
+
+
+(defun tree-sitter-debug-follow-mode ()
+  "Enable follow mode."
+  (interactive)
+  (if tree-sitter-debug-follow-mode
+      (tree-sitter-debug-follow-mode-off)
+    (tree-sitter-debug-follow-mode-on)))
+
 
 (defun tree-sitter-debug--display-tree (_old-tree)
   "Display the current `tree-sitter-tree'."
@@ -96,8 +146,9 @@ This only takes effect if `tree-sitter-debug-jump-buttons' is non-nil."
   "Tear down syntax tree debugging in the current buffer."
   (remove-hook 'tree-sitter-after-change-functions #'tree-sitter-debug--display-tree :local)
   (when (buffer-live-p tree-sitter-debug--tree-buffer)
-     (kill-buffer tree-sitter-debug--tree-buffer)
-     (setq tree-sitter-debug--tree-buffer nil)))
+    (kill-buffer tree-sitter-debug--tree-buffer)
+    (setq tree-sitter-debug--tree-buffer nil)
+    (tree-sitter-debug-follow-mode-off)))
 
 ;;;###autoload
 (define-minor-mode tree-sitter-debug-mode
