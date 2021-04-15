@@ -24,6 +24,7 @@ If you want to hack on `emacs-tree-sitter` itself, see the next section instead.
 - Add 3 of its directories to `load-path`: `core/`, `lisp/` and `langs/`.
 - Install [cask](https://cask.readthedocs.io).
 - Run `./bin/setup` (`.\bin\setup` on Windows).
+- Nix: run `nix-shell` in develop mode or`nix-shell --command "setup"` to initialize the environment
 
 If you want to hack on the high-level features (in Lisp) only:
 - Make changes to the `.el` files.

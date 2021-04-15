@@ -84,6 +84,21 @@ The methods below download pre-compiled binaries, so they only work for macOS, L
       (require 'tree-sitter-query)
     #+end_src
 
+** Installing with Doom Emacs
+    #+begin_src emacs-lisp
+(use-package! emacs-tree-sitter
+  :load-path "/path-to/emacs-tree-sitter/lisp"
+  :hook (rustic-mode . tree-sitter-mode)
+  :init
+  (add-to-list 'load-path "/path-to/emacs-tree-sitter/core")
+  (add-to-list 'load-path "/path-to/emacs-tree-sitter/langs")
+  (require 'tree-sitter)
+  (require 'tree-sitter-langs)
+  :config
+  (add-hook 'tree-sitter-after-on-hook #'tree-sitter-hl-mode)
+  (tree-sitter-require 'rust)
+  )
+    #+end_src
 * Getting Started
 :PROPERTIES:
 :EXPORT_FILE_NAME: getting-started
